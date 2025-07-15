@@ -10,8 +10,6 @@ logging.basicConfig(
 print("starting...")
 
 import os
-import f5_tts_mlx
-import numpy as np
 import shutil
 import subprocess
 import re
@@ -487,11 +485,11 @@ def convert_chapters_to_audio_standard_model(chapters_dir, output_audio_dir, tar
                         if fragment != "":
                             print(f"Generating fragment: {fragment}...")
                             fragment_file_path = os.path.join(temp_audio_directory, f"{temp_count}.wav")
-                            audio = generate(generation_text=fragment)
-                            if audio.ndim == 1:
-                                audio = np.expand_dims(audio, axis=1)
-                            sf.write(fragment_file_path, audio, 24000)
-                            temp_count += 1
+                            generate(generation_text=fragment, output_path=fragment_file_path)
+                            if os.path.exists(fragment_file_path):
+                                temp_count += 1
+                            else:
+                                print(f"Warning: TTS generation failed for fragment: '{fragment}'")
 
             combine_wav_files(temp_audio_directory, output_audio_dir, output_file_name)
             wipe_folder(temp_audio_directory)

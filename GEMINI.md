@@ -7,9 +7,9 @@ This repository is designed for converting ebooks to audiobooks using a Text-to-
 *   **TTS Engine:** `f5-tts-mlx` (recently migrated from `piper-tts`).
 *   **Web UI:** Gradio.
 *   **Ebook Processing:** Calibre's `ebook-convert` command-line tool.
-*   **Audio Manipulation:** `pydub`, `soundfile`.
+*   **Audio Manipulation:** `pydub`.
 *   **Text Processing:** `nltk` (for sentence tokenization).
-*   **Core Libraries:** `numpy`, `tqdm`, `requests`, `json`, `os`, `shutil`, `subprocess`, `re`, `tempfile`, `urllib.request`, `zipfile`, `time`, `ebooklib`, `epub`, `BeautifulSoup`, `csv`.
+*   **Core Libraries:** `tqdm`, `requests`, `json`, `os`, `shutil`, `subprocess`, `re`, `tempfile`, `urllib.request`, `zipfile`, `time`, `ebooklib`, `epub`, `BeautifulSoup`, `csv`.
 
 ## Workflow & Best Practices
 
@@ -32,7 +32,8 @@ This repository is designed for converting ebooks to audiobooks using a Text-to-
 5.  **`f5-tts-mlx` Specifics:**
     *   The `generate` function is imported from `f5_tts_mlx.generate`.
     *   The text input parameter for `generate` is `generation_text`, not `text`.
-    *   The output of `generate` is a NumPy array. For `soundfile.write`, it needs to be explicitly reshaped to include a channel dimension (e.g., `np.expand_dims(audio, axis=1)` for mono audio).
+    *   The `generate` function does not return audio data. Instead, it saves the audio to a file specified by the `output_path` parameter.
+    *   The code should check for the existence of the output file to verify that the TTS generation was successful.
 
 ## Common Issues & Resolutions
 
@@ -52,9 +53,9 @@ This repository is designed for converting ebooks to audiobooks using a Text-to-
     *   **Cause:** Incorrect parameter name used when calling `f5_tts_mlx.generate`.
     *   **Resolution:** Use `generation_text` instead of `text` as the parameter name.
 
-*   **`IndexError: tuple index out of range` (from `soundfile.write`)**:
-    *   **Cause:** `f5-tts-mlx` returns a 1D audio array, but `soundfile.write` expects a 2D array (even for mono).
-    *   **Resolution:** Reshape the audio array using `np.expand_dims(audio, axis=1)` before passing it to `sf.write`.
+*   **`AttributeError: 'NoneType' object has no attribute 'ndim'`**:
+    *   **Cause:** The `generate` function from `f5-tts-mlx` does not return audio data, so the `audio` variable is `None`.
+    *   **Resolution:** Pass an `output_path` to the `generate` function and check for the file's existence to confirm successful generation.
 
 *   **`LookupError: Resource punkt_tab not found.` (from NLTK)**:
     *   **Cause:** Missing NLTK data for sentence tokenization.
