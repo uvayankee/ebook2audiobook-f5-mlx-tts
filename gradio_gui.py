@@ -1,6 +1,17 @@
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    filename='gradio.log',
+    filemode='w'
+)
+
 print("starting...")
 
 import os
+import f5_tts_mlx
+import numpy as np
 import shutil
 import subprocess
 import re
@@ -21,51 +32,15 @@ import zipfile
 #print(f"Device selected is: {device}")
 
 nltk.download('punkt')  # Make sure to download the necessary models
+nltk.download('punkt_tab') # Download punkt_tab for sentence tokenization
 
 
 
 import os
 import wave
 import time
-from piper import PiperVoice
-
-def load_piper_tts(folder_name):
-    model_file = os.path.join(folder_name, f"{folder_name}.onnx")
-    config_file = os.path.join(folder_name, f"{folder_name}.json")
-
-    # Automatically rename the config file if it's named incorrectly
-    onnx_config_file = os.path.join(folder_name, f"{folder_name}.onnx.json")
-    if os.path.exists(onnx_config_file) and not os.path.exists(config_file):
-        os.rename(onnx_config_file, config_file)
-        print(f"Renamed {onnx_config_file} to {config_file}")
-
-    if not os.path.exists(model_file) or not os.path.exists(config_file):
-        print(f"Model file exists: {os.path.exists(model_file)}")
-        print(f"Config file exists: {os.path.exists(config_file)}")
-        print(f"Contents of {folder_name}:")
-        for item in os.listdir(folder_name):
-            print(item)
-        raise FileNotFoundError(f"Model or config file not found in {folder_name}.")
-
-    global voice
-    voice = PiperVoice.load(model_file, config_path=config_file, use_cuda=False)
-    print("Model loaded successfully.")
 
 
-def piper_to_tts(text_to_generate, output_audio_name):
-    if 'voice' not in globals():
-        raise RuntimeError("Piper TTS model is not loaded. Please load it using load_piper_tts first.")
-
-    start_time = time.time()
-
-    with wave.open(output_audio_name, 'wb') as wav_file:
-        wav_file.setnchannels(1)  # Assuming mono channel
-        wav_file.setsampwidth(2)  # Assuming 16-bit samples
-        wav_file.setframerate(voice.config.sample_rate)
-        voice.synthesize(text_to_generate, wav_file)
-
-    end_time = time.time()
-    print(f"Audio generated and saved to {output_audio_name} in {end_time - start_time:.2f} seconds")
 
 
 def download_and_extract_zip(url, extract_to='.'):
@@ -276,7 +251,7 @@ def create_chapter_labeled_book(ebook_file_path):
     def convert_to_epub(input_path, output_path):
         # Convert the ebook to EPUB format using Calibre's ebook-convert
         try:
-            subprocess.run(['ebook-convert', input_path, output_path], check=True)
+            subprocess.run(['/Applications/calibre.app/Contents/MacOS/ebook-convert', input_path, output_path], check=True)
         except subprocess.CalledProcessError as e:
             print(f"An error occurred while converting the eBook: {e}")
             return False
@@ -409,10 +384,10 @@ import sys
 # Check if Calibre's ebook-convert tool is installed
 def calibre_installed():
     try:
-        subprocess.run(['ebook-convert', '--version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.run(['/Applications/calibre.app/Contents/MacOS/ebook-convert', '--version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
         return True
-    except FileNotFoundError:
-        print("Calibre is not installed. Please install Calibre for this functionality.")
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        print("Calibre is not installed or the path is incorrect. Please install Calibre for this functionality.")
         return False
 
 
@@ -479,8 +454,11 @@ def split_long_sentence(sentence, max_length=249, max_pauses=10):
 
 #convert chapters into audio with piper-tts
 
+import numpy as np
+
+from f5_tts_mlx.generate import generate
+
 def convert_chapters_to_audio_standard_model(chapters_dir, output_audio_dir, target_voice_path=None, language=None, piper_model_name=None):
-    load_piper_tts(piper_model_name)  # Load the Piper TTS model with the given name
     if not os.path.exists(output_audio_dir):
         os.makedirs(output_audio_dir)
 
@@ -509,7 +487,10 @@ def convert_chapters_to_audio_standard_model(chapters_dir, output_audio_dir, tar
                         if fragment != "":
                             print(f"Generating fragment: {fragment}...")
                             fragment_file_path = os.path.join(temp_audio_directory, f"{temp_count}.wav")
-                            piper_to_tts(fragment, fragment_file_path)
+                            audio = generate(generation_text=fragment)
+                            if audio.ndim == 1:
+                                audio = np.expand_dims(audio, axis=1)
+                            sf.write(fragment_file_path, audio, 24000)
                             temp_count += 1
 
             combine_wav_files(temp_audio_directory, output_audio_dir, output_file_name)
