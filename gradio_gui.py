@@ -456,7 +456,7 @@ import numpy as np
 
 from f5_tts_mlx.generate import generate
 
-def convert_chapters_to_audio_standard_model(chapters_dir, output_audio_dir, target_voice_path=None, language=None, piper_model_name=None):
+def convert_chapters_to_audio_standard_model(chapters_dir, output_audio_dir, language=None):
     if not os.path.exists(output_audio_dir):
         os.makedirs(output_audio_dir)
 
@@ -499,9 +499,8 @@ def convert_chapters_to_audio_standard_model(chapters_dir, output_audio_dir, tar
 
 
 # Define the functions to be used in the Gradio interface
-def convert_ebook_to_audio(ebook_file, target_voice_file, voice_key, progress=gr.Progress()):
+def convert_ebook_to_audio(ebook_file, progress=gr.Progress()):
     ebook_file_path = ebook_file.name
-    target_voice = target_voice_file.name if target_voice_file else None
 
     working_files = os.path.join(".", "Working_files", "temp_ebook")
     full_folder_working_files = os.path.join(".", "Working_files")
@@ -532,7 +531,7 @@ def convert_ebook_to_audio(ebook_file, target_voice_file, voice_key, progress=gr
     except Exception as e:
         print(f"Error updating progress: {e}")
     
-    convert_chapters_to_audio_standard_model(chapters_directory, output_audio_directory, target_voice, piper_model_name=voice_key)
+    convert_chapters_to_audio_standard_model(chapters_directory, output_audio_directory)
     try:
         progress(0.9, desc="Creating M4B from chapters")
     except Exception as e:
@@ -591,78 +590,11 @@ import requests
 import os
 from tqdm import tqdm
 
-# Load the JSON data
-with open("voices.json", "r") as f:
-    voices_data = json.load(f)
-
-# Base URL for downloading model files
-BASE_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
-
-# Function to download selected voice files if missing
-def download_voice(voice_key):
-    voice_info = voices_data[voice_key]
-    files = voice_info["files"]
-    
-    download_dir = os.path.join(os.getcwd(), voice_key)
-    os.makedirs(download_dir, exist_ok=True)  # Create the folder if it doesn't exist
-    
-    downloaded_files = 0
-    
-    for file_path, file_info in files.items():
-        local_file_path = os.path.join(download_dir, os.path.basename(file_path))
-        
-        # Check if the file already exists
-        if os.path.exists(local_file_path):
-            print(f"File '{os.path.basename(file_path)}' already exists. Skipping download.")
-        else:
-            # Download the file with tqdm progress bar in the terminal
-            url = BASE_URL + file_path
-            response = requests.get(url, stream=True)
-            total_size = int(response.headers.get('content-length', 0))
-            with open(local_file_path, 'wb') as file, tqdm(
-                desc=f"Downloading {os.path.basename(file_path)}",
-                total=total_size,
-                unit='B',
-                unit_scale=True,
-                unit_divisor=1024,
-            ) as bar:
-                for data in response.iter_content(1024):
-                    file.write(data)
-                    bar.update(len(data))
-            downloaded_files += 1
-    
-    if downloaded_files == 0:
-        return f"All files for {voice_key} already exist. No files were downloaded."
-    else:
-        return f"Downloaded {downloaded_files} files for {voice_key}."
 
 
 
-# Define a new function to chain the download and conversion processes
-def download_and_convert(ebook_file, target_voice_file, voice_key, progress=gr.Progress()):
-    # First, download the voice files
-    download_message = download_voice(voice_key)
-    
-    # Then, proceed with the conversion
-    conversion_result, m4b_filepath = convert_ebook_to_audio(ebook_file, target_voice_file, voice_key, progress)
-    
-    # Combine the download message with the conversion result
-    return f"{download_message}\n{conversion_result}", m4b_filepath
 
-# Function to get details of the selected voice
-def get_voice_details(voice_key):
-    voice_info = voices_data[voice_key]
-    details = f"""
-    **Name:** {voice_info['name']}
-    **Language:** {voice_info['language']['name_english']} ({voice_info['language']['code']})
-    **Country:** {voice_info['language']['country_english']}
-    **Quality:** {voice_info['quality']}
-    **Number of Speakers:** {voice_info.get('num_speakers', 'N/A')}
-    """
-    return details
 
-# List of voice keys for dropdown
-voice_keys = list(voices_data.keys())
 
 # Integrating with the existing Gradio UI
 theme = gr.themes.Soft(
@@ -684,11 +616,6 @@ with gr.Blocks(theme=theme) as demo:
     with gr.Row():
         with gr.Column(scale=3):
             ebook_file = gr.File(label="eBook File")
-            target_voice_file = gr.File(label="Target Voice File (Optional)", visible=False)
-
-    voice_selector = gr.Dropdown(label="Select Voice", choices=voice_keys)  # Define voice_selector here
-
-    voice_details = gr.Markdown()
 
     convert_btn = gr.Button("Convert to Audiobook", variant="primary")
     output = gr.Textbox(label="Conversion Status")
@@ -697,8 +624,8 @@ with gr.Blocks(theme=theme) as demo:
     download_files = gr.File(label="Download Files", interactive=False)
 
     convert_btn.click(
-        download_and_convert,
-        inputs=[ebook_file, target_voice_file, voice_selector],  # Now voice_selector is defined
+        convert_ebook_to_audio,
+        inputs=[ebook_file],
         outputs=[output, audio_player]
     )
 
@@ -707,11 +634,7 @@ with gr.Blocks(theme=theme) as demo:
         outputs=[download_files]
     )
     
-    # Adding the Download Voices Section
-    download_voice_btn = gr.Button("Download Voice Files", visible=False)
     
-    voice_selector.change(get_voice_details, voice_selector, voice_details)
-    download_voice_btn.click(download_voice, voice_selector, None)
 
 demo.launch(share=True)
 
